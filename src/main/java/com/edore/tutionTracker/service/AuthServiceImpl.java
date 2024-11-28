@@ -1,8 +1,11 @@
 package com.edore.tutionTracker.service;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.jboss.resteasy.spi.InternalServerErrorException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,9 +28,12 @@ public class AuthServiceImpl implements AuthService {
     @Value("${keycloak.credentials.secret}")
     private String clientSecret;
 
+    @Autowired
+    RestTemplate restTemplate;
+
     @Override
     public String login(String username, String password) {
-        RestTemplate restTemplate = new RestTemplate();
+
         String url = authServerurl + "/realms/" + realm + "/protocol/openid-connect/token";
 
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
@@ -48,6 +54,29 @@ public class AuthServiceImpl implements AuthService {
 
         return response.getBody();
 
+    }
+
+    @Override
+    public void logout(String accessToken, String refreshToken) {
+        try {
+            MultiValueMap<String, String> requestParams = new LinkedMultiValueMap<>();
+            requestParams.add("client_id", clientId);
+            requestParams.add("client_secret", clientSecret);
+            requestParams.add("refresh_token", refreshToken);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            headers.set("Authorization", "Bearer " + accessToken);
+
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(requestParams, headers);
+
+            String logoutUrl = authServerurl + "/realms/" + realm + "/protocol/openid-connect/logout";
+
+            restTemplate.postForEntity(logoutUrl, request, Object.class);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new InternalServerErrorException("Error revoking access token");
+        }
     }
 
 }
