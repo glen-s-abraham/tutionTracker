@@ -1,12 +1,10 @@
 package com.edore.tutionTracker.service;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.jboss.resteasy.spi.InternalServerErrorException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,29 +15,29 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import com.edore.tutionTracker.config.KeycloakProperties;
+
 @Service
 public class AuthServiceImpl implements AuthService {
-    @Value("${keycloak.auth-server-url}")
-    private String authServerurl;
-    @Value("${keycloak.realm}")
-    private String realm;
-    @Value("${keycloak.resource}")
-    private String clientId;
-    @Value("${keycloak.credentials.secret}")
-    private String clientSecret;
+
+    private final KeycloakProperties keycloakProperties;
+    private final RestTemplate restTemplate;
 
     @Autowired
-    RestTemplate restTemplate;
+    public AuthServiceImpl(KeycloakProperties keycloakProperties, RestTemplate restTemplate) {
+        this.keycloakProperties = keycloakProperties;
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public String login(String username, String password) {
-
-        String url = authServerurl + "/realms/" + realm + "/protocol/openid-connect/token";
+        String url = keycloakProperties.getAuthServerUrl() + "/realms/" + keycloakProperties.getRealm()
+                + "/protocol/openid-connect/token";
 
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "password");
-        body.add("client_id", clientId);
-        body.add("client_secret", clientSecret);
+        body.add("client_id", keycloakProperties.getResource());
+        body.add("client_secret", keycloakProperties.getCredentialsSecret());
         body.add("username", username);
         body.add("password", password);
         body.add("scope", "openid");
@@ -47,21 +45,19 @@ public class AuthServiceImpl implements AuthService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<MultiValueMap<String, String>>(body,
-                headers);
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
         ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
 
         return response.getBody();
-
     }
 
     @Override
     public void logout(String accessToken, String refreshToken) {
         try {
             MultiValueMap<String, String> requestParams = new LinkedMultiValueMap<>();
-            requestParams.add("client_id", clientId);
-            requestParams.add("client_secret", clientSecret);
+            requestParams.add("client_id", keycloakProperties.getResource());
+            requestParams.add("client_secret", keycloakProperties.getCredentialsSecret());
             requestParams.add("refresh_token", refreshToken);
 
             HttpHeaders headers = new HttpHeaders();
@@ -70,7 +66,8 @@ public class AuthServiceImpl implements AuthService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(requestParams, headers);
 
-            String logoutUrl = authServerurl + "/realms/" + realm + "/protocol/openid-connect/logout";
+            String logoutUrl = keycloakProperties.getAuthServerUrl() + "/realms/" + keycloakProperties.getRealm()
+                    + "/protocol/openid-connect/logout";
 
             restTemplate.postForEntity(logoutUrl, request, Object.class);
         } catch (Exception e) {
@@ -78,5 +75,4 @@ public class AuthServiceImpl implements AuthService {
             throw new InternalServerErrorException("Error revoking access token");
         }
     }
-
 }
